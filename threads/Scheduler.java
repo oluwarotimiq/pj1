@@ -18,7 +18,6 @@
 // All rights reserved.  See the COPYRIGHT file for copyright notice and
 // limitation of liability and disclaimer of warranty provisions.
 
-
 //------------------------------------------------------------------------
 // Create a handler for scheduled interrupts for Round Robin 
 // implementation.
@@ -27,13 +26,11 @@
 //------------------------------------------------------------------------
 //class YourHandler 
 
-
 class Scheduler {
 
-  static private List readyList;// queue of threads that are ready to run,
-				// but not running
+  static private List readyList; // queue of threads that are ready to run, but not running
 
-  //constants for scheduling policies
+  // constants for scheduling policies
   static final int POLICY_PRIO_NP = 1;
   static final int POLICY_PRIO_P = 2;
   static final int POLICY_RR = 3;
@@ -41,127 +38,43 @@ class Scheduler {
   static final int POLICY_SJF_P = 5;
   static final int POLICY_FCFS = 6;
 
-  static int policy=POLICY_FCFS;
-
+  static int policy = POLICY_FCFS;
 
   static public NachosThread threadToBeDestroyed;
 
-
-
-  //----------------------------------------------------------------------
-  // Scheduler
-  // 	Initialize the list of ready but not running threads to empty.
-  //----------------------------------------------------------------------
-
+  // Initialize the list of ready but not running threads to empty
   static { 
     readyList = new List(); 
   } 
-
-  //----------------------------------------------------------------------
-  // start
-  // 	called by a Java thread (usually the initial thread that calls 
-  //    Nachos.main). Starts the first Nachos thread.
-  //
-  //----------------------------------------------------------------------
-
-  public static void start() {
-    NachosThread nextThread;
-
-
-    Debug.println('t', "Scheduling first Nachos thread");
-    
-    nextThread = findNextToRun();
-    if (nextThread == null) {
-      Debug.print('+', "Scheduler.start(): no NachosThread ready!");
-      return;
-    }
-
-    Debug.println('t', "Switching to thread: " + nextThread.getName());
-   
-
-    synchronized (nextThread) {
-      nextThread.setStatus(NachosThread.RUNNING);
-      nextThread.notify();
-    }
-    
-
-
-    // nextThread is now running
-    
-  }
-
-  //----------------------------------------------------------------------
-  // readyToRun
-  // 	Mark a thread as ready, but not running.
-  //	Put it on the ready list, for later scheduling onto the CPU.
-  //
-  //	"thread" is the thread to be put on the ready list.
-  //----------------------------------------------------------------------
-
-  public static void readyToRun(NachosThread thread) {
-    Debug.print('t', "Putting thread on ready list: " + thread.getName() + 
-		"\n");
-
-    thread.setStatus(NachosThread.READY);
-
-    //MP1 
-    switch (policy)
-    {
-       case POLICY_FCFS: 
-	  readyList.append(thread);
-	  break;
-       default:
-	  readyList.append(thread);
-	  break;
-    }
-  }
-  
-  //----------------------------------------------------------------------
-  // findNextToRun
-  // 	Return the next thread to be scheduled onto the CPU.
-  //	If there are no ready threads, return null.
-  // Side effect:
-  //	Thread is removed from the ready list.
-  //----------------------------------------------------------------------
 
   public static NachosThread findNextToRun() {
     return (NachosThread)readyList.remove();
   }
 
-  //----------------------------------------------------------------------
-  // run
-  // 	Dispatch the CPU to nextThread.  Save the state of the old thread,
-  //	and load the state of the new thread, by calling the machine
-  //	dependent context switch routine, SWITCH.
-  //
-  //      Note: we assume the state of the previously running thread has
-  //	already been changed from running to blocked or ready (depending).
-  // Side effect:
-  //	The global variable currentThread becomes nextThread.
-  //
-  //	"nextThread" is the thread to be put into the CPU.
-  //----------------------------------------------------------------------
-
   public static void run(NachosThread nextThread) {
     NachosThread oldThread;
-
     oldThread = NachosThread.thisThread();
-    
-    if (Nachos.USER_PROGRAM) {  // ignore until running user programs 
-      if (oldThread.space != null) {// if this thread runs a user program,
-        oldThread.saveUserState(); // save the user's CPU registers
-	oldThread.space.saveState();
+
+    if (Nachos.USER_PROGRAM) { 
+      if (oldThread.space != null) { 
+        oldThread.saveUserState(); 
+        oldThread.space.saveState();
       }
     }
 
+    // MP1 Round Robin - schedule an interrupt if necessary
+    if (policy == POLICY_RR) {
+      // Schedule an interrupt to enforce preemption
+      Interrupt.schedule(new Runnable() {
+        public void run() {
+          // Handle preemption by switching to the next thread
+          Interrupt.setLevel(Interrupt.INTERRUPT_OFF); 
+          Scheduler.yield();  // Yield CPU to the next thread
+        }
+      }, 40, Interrupt.TimerInt);  // Set to 40 ticks (or ms)
+    }
 
-    //MP1 Round Robin - schedule an interrupt if necessary
-
-
-    Debug.println('t', "Switching from thread: " + oldThread.getName() +
-		  " to thread: " + nextThread.getName());
-
-    // We do this in Java via wait/notify of the underlying Java threads.
+    Debug.println('t', "Switching from thread: " + oldThread.getName() + " to thread: " + nextThread.getName());
 
     synchronized (nextThread) {
       nextThread.setStatus(NachosThread.RUNNING);
@@ -169,53 +82,35 @@ class Scheduler {
     }
     synchronized (oldThread) {
       while (oldThread.getStatus() != NachosThread.RUNNING) 
-	try {oldThread.wait();} catch (InterruptedException e) {};
+        try { oldThread.wait(); } catch (InterruptedException e) {};
     }
-    
+
     Debug.println('t', "Now in thread: " + NachosThread.thisThread().getName());
 
-    // If the old thread gave up the processor because it was finishing,
-    // we need to delete its carcass. 
     if (threadToBeDestroyed != null) {
       threadToBeDestroyed.stop();
       threadToBeDestroyed = null;
     }
-    
+
     if (Nachos.USER_PROGRAM) {
-      if (oldThread.space != null) {// if there is an address space
-	oldThread.restoreUserState();     // to restore, do it.
-	oldThread.space.restoreState();
+      if (oldThread.space != null) {
+        oldThread.restoreUserState();
+        oldThread.space.restoreState();
       }
     }
   }
 
-  //----------------------------------------------------------------------
-  // print
-  // 	Print the scheduler state -- in other words, the contents of
-  //	the ready list.  For debugging.
-  //----------------------------------------------------------------------
   public static void print() {
     System.out.print("Ready list contents:");
     readyList.print();
   }
 
-  public static void setSchedulerPolicy(int p)
-  {
-     policy = p;
+  public static void setSchedulerPolicy(int p) {
+    policy = p;
   }
 
-  //----------------------------------------------------------------------
-  // shouldISwitch
-  //    Checks to see if current thread should be preempted	
-  //----------------------------------------------------------------------
-
-  public static boolean shouldISwitch(NachosThread current, NachosThread newThread)
-  {
-     //MP1 preemption code
-     
-     return false;  //default
+  public static boolean shouldISwitch(NachosThread current, NachosThread newThread) {
+    // MP1 preemption code
+    return false;  // default
   }
-
 }
-
-
