@@ -28,9 +28,9 @@
 
 class Scheduler {
 
-  static private List readyList; // queue of threads that are ready to run, but not running
+  static private List readyList;// queue of threads that are ready to run, but not running
 
-  // constants for scheduling policies
+  //constants for scheduling policies
   static final int POLICY_PRIO_NP = 1;
   static final int POLICY_PRIO_P = 2;
   static final int POLICY_RR = 3;
@@ -45,10 +45,20 @@ class Scheduler {
   // Initialize the list of ready but not running threads to empty
   static { 
     readyList = new List(); 
-  } 
+  }
 
+  // SJF Non-preemptive: Return the next thread with the shortest estimated runtime
   public static NachosThread findNextToRun() {
-    return (NachosThread)readyList.remove();
+    NachosThread shortestJob = null;
+    for (NachosThread thread : readyList) {
+        if (shortestJob == null || thread.getEstimatedRunTime() < shortestJob.getEstimatedRunTime()) {
+            shortestJob = thread;
+        }
+    }
+    if (shortestJob != null) {
+        readyList.remove(shortestJob);
+    }
+    return shortestJob;
   }
 
   public static void run(NachosThread nextThread) {
@@ -64,14 +74,12 @@ class Scheduler {
 
     // MP1 Round Robin - schedule an interrupt if necessary
     if (policy == POLICY_RR) {
-      // Schedule an interrupt to enforce preemption
       Interrupt.schedule(new Runnable() {
         public void run() {
-          // Handle preemption by switching to the next thread
           Interrupt.setLevel(Interrupt.INTERRUPT_OFF); 
-          Scheduler.yield();  // Yield CPU to the next thread
+          Scheduler.yield();
         }
-      }, 40, Interrupt.TimerInt);  // Set to 40 ticks (or ms)
+      }, 40, Interrupt.TimerInt); 
     }
 
     Debug.println('t', "Switching from thread: " + oldThread.getName() + " to thread: " + nextThread.getName());
@@ -109,8 +117,11 @@ class Scheduler {
     policy = p;
   }
 
+  // SJF Preemptive: Decide if the current thread should be preempted
   public static boolean shouldISwitch(NachosThread current, NachosThread newThread) {
-    // MP1 preemption code
-    return false;  // default
+    if (policy == POLICY_SJF_P) {
+        return newThread.getEstimatedRunTime() < current.getEstimatedRunTime();
+    }
+    return false;
   }
 }
