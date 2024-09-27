@@ -28,9 +28,9 @@
 
 class Scheduler {
 
-  static private List readyList;// queue of threads that are ready to run, but not running
+  static private List readyList; // queue of threads that are ready to run, but not running
 
-  //constants for scheduling policies
+  // constants for scheduling policies
   static final int POLICY_PRIO_NP = 1;
   static final int POLICY_PRIO_P = 2;
   static final int POLICY_RR = 3;
@@ -45,20 +45,20 @@ class Scheduler {
   // Initialize the list of ready but not running threads to empty
   static { 
     readyList = new List(); 
-  }
+  } 
 
-  // SJF Non-preemptive: Return the next thread with the shortest estimated runtime
+  // Non-preemptive Priority Scheduling: Return the next thread with the highest priority
   public static NachosThread findNextToRun() {
-    NachosThread shortestJob = null;
+    NachosThread highestPriorityThread = null;
     for (NachosThread thread : readyList) {
-        if (shortestJob == null || thread.getEstimatedRunTime() < shortestJob.getEstimatedRunTime()) {
-            shortestJob = thread;
+        if (highestPriorityThread == null || thread.getPriority() < highestPriorityThread.getPriority()) {
+            highestPriorityThread = thread;
         }
     }
-    if (shortestJob != null) {
-        readyList.remove(shortestJob);
+    if (highestPriorityThread != null) {
+        readyList.remove(highestPriorityThread);
     }
-    return shortestJob;
+    return highestPriorityThread;
   }
 
   public static void run(NachosThread nextThread) {
@@ -117,8 +117,11 @@ class Scheduler {
     policy = p;
   }
 
-  // SJF Preemptive: Decide if the current thread should be preempted
+  // Preemptive Priority Scheduling: Decide if the current thread should be preempted
   public static boolean shouldISwitch(NachosThread current, NachosThread newThread) {
+    if (policy == POLICY_PRIO_P) {
+        return newThread.getPriority() < current.getPriority();
+    }
     if (policy == POLICY_SJF_P) {
         return newThread.getEstimatedRunTime() < current.getEstimatedRunTime();
     }
